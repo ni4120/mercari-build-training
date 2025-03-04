@@ -46,7 +46,7 @@ func (s Server) Run() int {
 	mux.HandleFunc("GET /", h.Hello)
 	mux.HandleFunc("POST /items", h.AddItem)
 	mux.HandleFunc("GET /items", h.GetAllItem)
-	mux.HandleFunc("GET /items/{id}", h.GetItemById)
+	mux.HandleFunc("GET /items/{item_id}", h.GetItemById)
 	mux.HandleFunc("GET /images/{filename}", h.GetImage)
 
 	// start the server
@@ -276,7 +276,7 @@ func (s *Handlers) GetAllItem(w http.ResponseWriter, r *http.Request) {
 
 	items, err := s.itemRepo.GetAllItem(ctx)
 	if err != nil {
-		slog.Error("failede to get all item : ", "error", err)
+		slog.Error("failed to get all item : ", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -289,6 +289,47 @@ func (s *Handlers) GetAllItem(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Handlers) GetItemById(w http.ResponseWriter, r *http.Request) {
+type GetItemByIdRequest struct {
+	ItemId string
+}
 
+func parseGetItemByIdRequest(r *http.Request) (*GetItemByIdRequest, error) {
+	req := &GetItemByIdRequest{
+		ItemId: r.PathValue("item_id"),
+	}
+
+	if req.ItemId == "" {
+		return nil, errors.New("itemId is required")
+	}
+
+	return req, nil
+}
+
+type GetItemByIdResponse struct {
+	Items []Item `json:"items`
+}
+
+func (s *Handlers) GetItemById(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	req, err := parseGetItemByIdRequest(r)
+	if err != nil {
+		slog.Warn("failed to parse get item by id request: ", "error", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	item, err := s.itemRepo.GetItemById(ctx, req.ItemId)
+	if err != nil {
+		slog.Error("failed to get item by id:", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp := GetItemByIdResponse{Items: []Item{item}}
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

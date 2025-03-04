@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	// STEP 5-1: uncomment this line
 	// _ "github.com/mattn/go-sqlite3"
 )
@@ -29,6 +30,7 @@ type Item struct {
 type ItemRepository interface {
 	Insert(ctx context.Context, item *Item) error
 	GetAllItem(ctx context.Context) ([]Item, error)
+	GetItemById(ctx context.Context, itemId string) (Item, error)
 }
 
 // itemRepository is an implementation of ItemRepository
@@ -108,4 +110,23 @@ func (i *itemRepository) GetAllItem(ctx context.Context) ([]Item, error) {
 	}
 	return items, nil
 
+}
+
+func (i *itemRepository) GetItemById(ctx context.Context, itemId string) (Item, error) {
+	items, err := i.GetAllItem(ctx)
+	if err != nil {
+		return Item{}, err
+	}
+
+	index, err := strconv.Atoi(itemId)
+	if err != nil {
+		return Item{}, errors.New("invalid item ID format")
+	}
+
+	index = index - 1
+	if index < 0 || index >= len(items) {
+		return Item{}, errors.New("item index out of range")
+	}
+
+	return items[index], nil
 }

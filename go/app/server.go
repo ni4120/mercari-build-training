@@ -190,7 +190,7 @@ func (s *Handlers) storeImage(image []byte) (filePath string, err error) {
 		return fileName, nil
 	}
 
-	err = os.WriteFile(filePath, image, 0644)
+	err = StoreImage(filePath, image)
 	if err != nil {
 		return "", err
 	}

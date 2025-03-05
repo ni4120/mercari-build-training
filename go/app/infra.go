@@ -2,13 +2,10 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	// STEP 5-1: uncomment this line
 	// _ "github.com/mattn/go-sqlite3"
@@ -20,7 +17,7 @@ type Item struct {
 	ID       int    `db:"id" json:"-"`
 	Name     string `db:"name" json:"name"`
 	Category string `db:"category" json:"category"`
-	Image    string `db:"image" json:"image"`
+	Image    string `db:"image_name" json:"image_name"`
 }
 
 // Please run `go generate ./...` to generate the mock implementation
@@ -77,12 +74,7 @@ func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 // This package doesn't have a related interface for simplicity.
 func StoreImage(fileName string, image []byte) error {
 	// STEP 4-4: add an implementation to store an image
-	hash := sha256.Sum256([]byte(fileName))
-	fileName = hex.EncodeToString(hash[:]) + ".jpg"
-
-	filePath := filepath.Join("images", fileName)
-
-	if err := os.WriteFile(filePath, image, 0644); err != nil {
+	if err := os.WriteFile(fileName, image, 0644); err != nil {
 		return err
 	}
 

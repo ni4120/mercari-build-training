@@ -47,6 +47,11 @@ func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 	items, err := i.GetAllItem(ctx)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			file, err := os.Create(i.fileName)
+			if err != nil {
+				return err
+			}
+			file.Close()
 			items = []Item{}
 		} else {
 			return err

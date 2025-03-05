@@ -46,16 +46,7 @@ func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
 	// STEP 4-2: add an implementation to store an item
 	items, err := i.GetAllItem(ctx)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			file, err := os.Create(i.fileName)
-			if err != nil {
-				return err
-			}
-			file.Close()
-			items = []Item{}
-		} else {
-			return err
-		}
+		return err
 	}
 
 	items = append(items, *item)
@@ -90,6 +81,11 @@ func (i *itemRepository) GetAllItem(ctx context.Context) ([]Item, error) {
 	file, err := os.Open(i.fileName)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			file, err := os.Create(i.fileName)
+			if err != nil {
+				return nil, err
+			}
+			defer file.Close()
 			return []Item{}, nil
 		}
 		return nil, err

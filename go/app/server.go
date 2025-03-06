@@ -38,13 +38,17 @@ func (s Server) Run() int {
 	}
 
 	// STEP 5-1: set up the database connection
-	//dbPath := "db/mercari.sqlite3"
 	db, err := sql.Open("sqlite3", s.DBPath)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		return 1
 	}
 	defer db.Close()
+
+	if err := initDB(db); err != nil {
+		slog.Error("failed to initialize database", "error", err)
+		return 1
+	}
 
 	// set up handlers
 	itemRepo := NewItemRepository(db)

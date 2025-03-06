@@ -25,6 +25,7 @@ type ItemRepository interface {
 	Insert(ctx context.Context, item *Item) error
 	GetAllItem(ctx context.Context) ([]Item, error)
 	GetItemById(ctx context.Context, itemId string) (Item, error)
+	SearchItemsByKeyword(ctx context.Context, keyword string) ([]Item, error)
 }
 
 // itemRepository is an implementation of ItemRepository
@@ -83,4 +84,22 @@ func (i *itemRepository) GetItemById(ctx context.Context, itemId string) (Item, 
 		return Item{}, err
 	}
 	return item, nil
+}
+
+func (i *itemRepository) SearchItemsByKeyword(ctx context.Context, keyword string) ([]Item, error) {
+	rows, err := i.db.QueryContext(ctx, "SELECT id,name,category,image_name FROM items WHERE name LIKE ?", "%"+keyword+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []Item
+	for rows.Next() {
+		var item Item
+		if err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.Image); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }

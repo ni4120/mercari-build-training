@@ -2,6 +2,7 @@ package app
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ type Server struct {
 	Port string
 	// ImageDirPath is the path to the directory storing images.
 	ImageDirPath string
+	DBPath       string
 }
 
 // Run is a method to start the server.
@@ -36,9 +38,16 @@ func (s Server) Run() int {
 	}
 
 	// STEP 5-1: set up the database connection
+	//dbPath := "db/mercari.sqlite3"
+	db, err := sql.Open("sqlite3", s.DBPath)
+	if err != nil {
+		slog.Error("failed to connect to database", "error", err)
+		return 1
+	}
+	defer db.Close()
 
 	// set up handlers
-	itemRepo := NewItemRepository()
+	itemRepo := NewItemRepository(db)
 	h := &Handlers{imgDirPath: s.ImageDirPath, itemRepo: itemRepo}
 
 	// set up routes
@@ -51,7 +60,7 @@ func (s Server) Run() int {
 
 	// start the server
 	slog.Info("http server started on", "port", s.Port)
-	err := http.ListenAndServe(":"+s.Port, simpleCORSMiddleware(simpleLoggerMiddleware(mux), frontURL, []string{"GET", "HEAD", "POST", "OPTIONS"}))
+	err = http.ListenAndServe(":"+s.Port, simpleCORSMiddleware(simpleLoggerMiddleware(mux), frontURL, []string{"GET", "HEAD", "POST", "OPTIONS"}))
 	if err != nil {
 		slog.Error("failed to start server: ", "error", err)
 		return 1

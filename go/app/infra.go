@@ -2,13 +2,10 @@ package app
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
-	"io"
+	_ "github.com/mattn/go-sqlite3"
 	"os"
-	"strconv"
-	// STEP 5-1: uncomment this line
-	// _ "github.com/mattn/go-sqlite3"
 )
 
 var errImageNotFound = errors.New("image not found")
@@ -32,38 +29,18 @@ type ItemRepository interface {
 
 // itemRepository is an implementation of ItemRepository
 type itemRepository struct {
-	// fileName is the path to the JSON file storing items.
-	fileName string
+	db *sql.DB
 }
 
 // NewItemRepository creates a new itemRepository.
-func NewItemRepository() ItemRepository {
-	return &itemRepository{fileName: "items.json"}
+func NewItemRepository(db *sql.DB) ItemRepository {
+	return &itemRepository{db: db}
 }
 
 // Insert inserts an item into the repository.
 func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
-	// STEP 4-2: add an implementation to store an item
-	items, err := i.GetAllItem(ctx)
-	if err != nil {
-		return err
-	}
-
-	items = append(items, *item)
-
-	file, err := os.Create(i.fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", " ")
-	if err := encoder.Encode(items); err != nil {
-		return err
-	}
-
-	return nil
+	_, err := i.db.ExecContext(ctx, "INSERT INTO items (name, category, image_name) VALUES (?, ?, ?)", item.Name, item.Category, item.Image)
+	return err
 }
 
 // StoreImage stores an image and returns an error if any.
@@ -78,48 +55,32 @@ func StoreImage(fileName string, image []byte) error {
 }
 
 func (i *itemRepository) GetAllItem(ctx context.Context) ([]Item, error) {
-	file, err := os.Open(i.fileName)
+	rows, err := i.db.QueryContext(ctx, "SELECT id, name, category, image_name FROM items")
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			file, err := os.Create(i.fileName)
-			if err != nil {
-				return nil, err
-			}
-			defer file.Close()
-			return []Item{}, nil
-		}
 		return nil, err
 	}
-	defer file.Close()
+	defer rows.Close()
 
 	var items []Item
-
-	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&items); err != nil {
-		if errors.Is(err, io.EOF) {
-			return []Item{}, nil
+	for rows.Next() {
+		var item Item
+		if err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.Image); err != nil {
+			return nil, err
 		}
-		return nil, err
+		items = append(items, item)
 	}
 	return items, nil
-
 }
 
 func (i *itemRepository) GetItemById(ctx context.Context, itemId string) (Item, error) {
-	items, err := i.GetAllItem(ctx)
+	var item Item
+	err := i.db.QueryRowContext(ctx, "SELECT id, name, category, image_name FROM items WHERE id = ?", itemId).
+		Scan(&item.ID, &item.Name, &item.Category, &item.Image)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Item{}, errors.New("item not found")
+		}
 		return Item{}, err
 	}
-
-	index, err := strconv.Atoi(itemId)
-	if err != nil {
-		return Item{}, errors.New("invalid item ID format")
-	}
-
-	index = index - 1
-	if index < 0 || index >= len(items) {
-		return Item{}, errors.New("item index out of range")
-	}
-
-	return items[index], nil
+	return item, nil
 }

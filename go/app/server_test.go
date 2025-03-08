@@ -3,10 +3,10 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -166,8 +166,9 @@ func TestAddItem(t *testing.T) {
 				"category": "phone",
 			},
 			injector: func(m *MockItemRepository) {
-				// STEP 6-3: define mock expectation
-				// succeeded to insert
+				m.EXPECT().
+					Insert(gomock.Any(), gomock.Any()).
+					Return(nil)
 			},
 			wants: wants{
 				code: http.StatusOK,
@@ -179,8 +180,9 @@ func TestAddItem(t *testing.T) {
 				"category": "phone",
 			},
 			injector: func(m *MockItemRepository) {
-				// STEP 6-3: define mock expectation
-				// failed to insert
+				m.EXPECT().
+					Insert(gomock.Any(), gomock.Any()).
+					Return(errors.New("database error"))
 			},
 			wants: wants{
 				code: http.StatusInternalServerError,
@@ -196,16 +198,30 @@ func TestAddItem(t *testing.T) {
 
 			mockIR := NewMockItemRepository(ctrl)
 			tt.injector(mockIR)
-			h := &Handlers{itemRepo: mockIR}
 
-			values := url.Values{}
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+
 			for k, v := range tt.args {
-				values.Set(k, v)
+				_ = writer.WriteField(k, v)
 			}
-			req := httptest.NewRequest("POST", "/items", strings.NewReader(values.Encode()))
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+			filePart, err := writer.CreateFormFile("image", "test.jpg")
+			if err != nil {
+				t.Fatalf("failed to create file part: %v", err)
+			}
+			_, err = filePart.Write([]byte("test image data"))
+			if err != nil {
+				t.Fatalf("failed to write image data: %v", err)
+			}
+
+			writer.Close()
+
+			req := httptest.NewRequest("POST", "/items", body)
+			req.Header.Set("Content-Type", writer.FormDataContentType())
 
 			rr := httptest.NewRecorder()
+			h := &Handlers{itemRepo: mockIR}
 			h.AddItem(rr, req)
 
 			if tt.wants.code != rr.Code {

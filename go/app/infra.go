@@ -4,9 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	_ "github.com/mattn/go-sqlite3"
 	"log/slog"
 	"os"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var errImageNotFound = errors.New("image not found")
@@ -14,7 +15,7 @@ var errImageNotFound = errors.New("image not found")
 type Item struct {
 	ID       int    `db:"id" json:"-"`
 	Name     string `db:"name" json:"name"`
-	Category string `db:"category_name" json:"category"`
+	Category string `db:"category_name" json:"category_name"`
 	Image    string `db:"image_name" json:"image_name"`
 }
 

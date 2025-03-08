@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bytes"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -19,26 +22,35 @@ func TestParseAddItemRequest(t *testing.T) {
 		err bool
 	}
 
+	testImageData, err := os.ReadFile("../images/default.jpg")
+	if err != nil {
+		testImageData = []byte("test image data")
+	}
+	emptyImageData := []byte{}
 	// STEP 6-1: define test cases
 	cases := map[string]struct {
-		args map[string]string
+		args      map[string]string
+		imageData []byte
 		wants
 	}{
 		"ok: valid request": {
 			args: map[string]string{
-				"name":     "", // fill here
-				"category": "", // fill here
+				"name":     "Test Item",
+				"category": "Test Category",
 			},
+			imageData: testImageData,
 			wants: wants{
 				req: &AddItemRequest{
-					Name: "", // fill here
-					// Category: "", // fill here
+					Name:     "Test Item",
+					Category: "Test Category",
+					Image:    testImageData,
 				},
 				err: false,
 			},
 		},
 		"ng: empty request": {
-			args: map[string]string{},
+			args:      map[string]string{},
+			imageData: emptyImageData,
 			wants: wants{
 				req: nil,
 				err: true,
@@ -51,17 +63,37 @@ func TestParseAddItemRequest(t *testing.T) {
 			t.Parallel()
 
 			// prepare request body
-			values := url.Values{}
+			body := &bytes.Buffer{}
+			writer := multipart.NewWriter(body)
+
 			for k, v := range tt.args {
-				values.Set(k, v)
+				_ = writer.WriteField(k, v)
+				if err != nil {
+					t.Fatalf("failed to write field %s: %v", k, err)
+				}
+
 			}
 
+			// Add image data
+			if len(tt.imageData) > 0 {
+				filePart, err := writer.CreateFormFile("image", "default.jpg")
+				if err != nil {
+					t.Fatalf("failed to create file part: %v", err)
+				}
+				_, err = filePart.Write(tt.imageData)
+				if err != nil {
+					t.Fatalf("failed to write image data: %v", err)
+				}
+			}
+
+			writer.Close()
+
 			// prepare HTTP request
-			req, err := http.NewRequest("POST", "http://localhost:9000/items", strings.NewReader(values.Encode()))
+			req, err := http.NewRequest("POST", "http://localhost:9000/items", body)
 			if err != nil {
 				t.Fatalf("failed to create request: %v", err)
 			}
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("Content-Type", writer.FormDataContentType())
 
 			// execute test target
 			got, err := parseAddItemRequest(req)

@@ -41,7 +41,7 @@ func NewItemRepository(db *sql.DB) ItemRepository {
 }
 
 func initDB(db *sql.DB) error {
-	sqlFile := "db/items.sql"
+	const sqlFile = "db/items.sql"
 
 	if _, err := os.Stat(sqlFile); os.IsNotExist(err) {
 		slog.Error("SQL file not found", "file", sqlFile)

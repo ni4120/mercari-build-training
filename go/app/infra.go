@@ -2,13 +2,12 @@ package app
 
 import (
 	"context"
-	"encoding/json"
+	"database/sql"
 	"errors"
-	"io"
+	"log/slog"
 	"os"
-	"strconv"
-	// STEP 5-1: uncomment this line
-	// _ "github.com/mattn/go-sqlite3"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var errImageNotFound = errors.New("image not found")
@@ -16,7 +15,7 @@ var errImageNotFound = errors.New("image not found")
 type Item struct {
 	ID       int    `db:"id" json:"-"`
 	Name     string `db:"name" json:"name"`
-	Category string `db:"category" json:"category"`
+	Category string `db:"category_name" json:"category_name"`
 	Image    string `db:"image_name" json:"image_name"`
 }
 
@@ -28,42 +27,60 @@ type ItemRepository interface {
 	Insert(ctx context.Context, item *Item) error
 	GetAllItem(ctx context.Context) ([]Item, error)
 	GetItemById(ctx context.Context, itemId string) (Item, error)
+	SearchItemsByKeyword(ctx context.Context, keyword string) ([]Item, error)
 }
 
 // itemRepository is an implementation of ItemRepository
 type itemRepository struct {
-	// fileName is the path to the JSON file storing items.
-	fileName string
+	db *sql.DB
 }
 
 // NewItemRepository creates a new itemRepository.
-func NewItemRepository() ItemRepository {
-	return &itemRepository{fileName: "items.json"}
+func NewItemRepository(db *sql.DB) ItemRepository {
+	return &itemRepository{db: db}
+}
+
+func initDB(db *sql.DB) error {
+	const sqlFile = "db/items.sql"
+
+	if _, err := os.Stat(sqlFile); os.IsNotExist(err) {
+		slog.Error("SQL file not found", "file", sqlFile)
+		return errors.New("SQL file not found")
+	}
+
+	sqlBytes, err := os.ReadFile(sqlFile)
+	if err != nil {
+		slog.Error("Failed to read SQL file", "file", sqlFile, "error", err)
+		return err
+	}
+
+	_, err = db.Exec(string(sqlBytes))
+	if err != nil {
+		slog.Error("Failed to execute SQL file", "error", err)
+		return err
+	}
+
+	slog.Info("Database initialized successfully")
+	return nil
 }
 
 // Insert inserts an item into the repository.
 func (i *itemRepository) Insert(ctx context.Context, item *Item) error {
-	// STEP 4-2: add an implementation to store an item
-	items, err := i.GetAllItem(ctx)
+
+	var categoryID int
+
+	err := i.db.QueryRowContext(ctx, "SELECT id FROM categories WHERE name = ?", item.Category).Scan(&categoryID)
 	if err != nil {
-		return err
+		res, err := i.db.ExecContext(ctx, "INSERT INTO categories (name) VALUES (?)", item.Category)
+		if err != nil {
+			return err
+		}
+		lastID, _ := res.LastInsertId()
+		categoryID = int(lastID)
 	}
 
-	items = append(items, *item)
-
-	file, err := os.Create(i.fileName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", " ")
-	if err := encoder.Encode(items); err != nil {
-		return err
-	}
-
-	return nil
+	_, err = i.db.ExecContext(ctx, "INSERT INTO items (name,category_id, image_name) VALUES (?, ?, ?)", item.Name, categoryID, item.Image)
+	return err
 }
 
 // StoreImage stores an image and returns an error if any.
@@ -78,48 +95,64 @@ func StoreImage(fileName string, image []byte) error {
 }
 
 func (i *itemRepository) GetAllItem(ctx context.Context) ([]Item, error) {
-	file, err := os.Open(i.fileName)
+	rows, err := i.db.QueryContext(ctx, `
+		SELECT items.id, items.name, categories.name AS category_name ,items.image_name
+		FROM items
+		JOIN categories ON items.category_id = categories.id
+		`)
+
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			file, err := os.Create(i.fileName)
-			if err != nil {
-				return nil, err
-			}
-			defer file.Close()
-			return []Item{}, nil
-		}
 		return nil, err
 	}
-	defer file.Close()
+	defer rows.Close()
 
 	var items []Item
-
-	decoder := json.NewDecoder(file)
-	if err := decoder.Decode(&items); err != nil {
-		if errors.Is(err, io.EOF) {
-			return []Item{}, nil
+	for rows.Next() {
+		var item Item
+		if err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.Image); err != nil {
+			return nil, err
 		}
-		return nil, err
+		items = append(items, item)
 	}
 	return items, nil
-
 }
 
 func (i *itemRepository) GetItemById(ctx context.Context, itemId string) (Item, error) {
-	items, err := i.GetAllItem(ctx)
+	var item Item
+	err := i.db.QueryRowContext(ctx, `
+	SELECT items.id,items.name,categories.name AS category_name,items.image_name
+	FROM items
+	JOIN categories ON items.category_id = categories.id
+	WHERE items.id = ?
+	`, itemId).Scan(&item.ID, &item.Name, &item.Category, &item.Image)
+
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Item{}, errors.New("item not found")
+		}
 		return Item{}, err
 	}
+	return item, nil
+}
 
-	index, err := strconv.Atoi(itemId)
+func (i *itemRepository) SearchItemsByKeyword(ctx context.Context, keyword string) ([]Item, error) {
+	rows, err := i.db.QueryContext(ctx, `
+		SELECT items.id, items.name, categories.name AS category_name, items.image_name
+		FROM items
+		JOIN categories ON items.category_id = categories.id
+		WHERE items.name LIKE ?`, "%"+keyword+"%")
 	if err != nil {
-		return Item{}, errors.New("invalid item ID format")
+		return nil, err
 	}
+	defer rows.Close()
 
-	index = index - 1
-	if index < 0 || index >= len(items) {
-		return Item{}, errors.New("item index out of range")
+	var items []Item
+	for rows.Next() {
+		var item Item
+		if err := rows.Scan(&item.ID, &item.Name, &item.Category, &item.Image); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
 	}
-
-	return items[index], nil
+	return items, nil
 }

@@ -7,12 +7,15 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"go.uber.org/mock/gomock"
+)
+
+const (
+	testImageData = "test.jpg"
 )
 
 func TestParseAddItemRequest(t *testing.T) {
@@ -23,11 +26,6 @@ func TestParseAddItemRequest(t *testing.T) {
 		err bool
 	}
 
-	testImageData, err := os.ReadFile("../images/default.jpg")
-	if err != nil {
-		testImageData = []byte("test image data")
-	}
-	emptyImageData := []byte{}
 	// STEP 6-1: define test cases
 	cases := map[string]struct {
 		args      map[string]string
@@ -39,19 +37,19 @@ func TestParseAddItemRequest(t *testing.T) {
 				"name":     "Test Item",
 				"category": "Test Category",
 			},
-			imageData: testImageData,
+			imageData: []byte(testImageData),
 			wants: wants{
 				req: &AddItemRequest{
 					Name:     "Test Item",
 					Category: "Test Category",
-					Image:    testImageData,
+					Image:    []byte(testImageData),
 				},
 				err: false,
 			},
 		},
 		"ng: empty request": {
 			args:      map[string]string{},
-			imageData: emptyImageData,
+			imageData: nil,
 			wants: wants{
 				req: nil,
 				err: true,
@@ -68,8 +66,7 @@ func TestParseAddItemRequest(t *testing.T) {
 			writer := multipart.NewWriter(body)
 
 			for k, v := range tt.args {
-				_ = writer.WriteField(k, v)
-				if err != nil {
+				if err := writer.WriteField(k, v); err != nil {
 					t.Fatalf("failed to write field %s: %v", k, err)
 				}
 
@@ -77,12 +74,11 @@ func TestParseAddItemRequest(t *testing.T) {
 
 			// Add image data
 			if len(tt.imageData) > 0 {
-				filePart, err := writer.CreateFormFile("image", "default.jpg")
+				part, err := writer.CreateFormFile("image", "testdata/test.jpg")
 				if err != nil {
 					t.Fatalf("failed to create file part: %v", err)
 				}
-				_, err = filePart.Write(tt.imageData)
-				if err != nil {
+				if _, err := part.Write(tt.imageData); err != nil {
 					t.Fatalf("failed to write image data: %v", err)
 				}
 			}
@@ -203,15 +199,17 @@ func TestAddItem(t *testing.T) {
 			writer := multipart.NewWriter(body)
 
 			for k, v := range tt.args {
-				_ = writer.WriteField(k, v)
+				if err := writer.WriteField(k, v); err != nil {
+					t.Fatalf("failed to write field: %v", err)
+				}
 			}
 
-			filePart, err := writer.CreateFormFile("image", "test.jpg")
+			part, err := writer.CreateFormFile("image", "test.jpg")
 			if err != nil {
 				t.Fatalf("failed to create file part: %v", err)
 			}
-			_, err = filePart.Write([]byte("test image data"))
-			if err != nil {
+
+			if _, err := part.Write([]byte(testImageData)); err != nil {
 				t.Fatalf("failed to write image data: %v", err)
 			}
 

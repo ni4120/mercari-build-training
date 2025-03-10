@@ -154,8 +154,9 @@ func TestAddItem(t *testing.T) {
 		code int
 	}
 	cases := map[string]struct {
-		args     map[string]string
-		injector func(m *MockItemRepository)
+		args      map[string]string
+		imageData []byte
+		injector  func(m *MockItemRepository)
 		wants
 	}{
 		"ok: correctly inserted": {
@@ -163,10 +164,11 @@ func TestAddItem(t *testing.T) {
 				"name":     "used iPhone 16e",
 				"category": "phone",
 			},
+			imageData: []byte(testImageData),
 			injector: func(m *MockItemRepository) {
 				m.EXPECT().
 					Insert(gomock.Any(), gomock.Any()).
-					Return(nil)
+					Return(nil).Times(1)
 			},
 			wants: wants{
 				code: http.StatusOK,
@@ -177,6 +179,7 @@ func TestAddItem(t *testing.T) {
 				"name":     "used iPhone 16e",
 				"category": "phone",
 			},
+			imageData: nil,
 			injector: func(m *MockItemRepository) {
 				m.EXPECT().
 					Insert(gomock.Any(), gomock.Any()).
@@ -257,12 +260,14 @@ func TestAddItemE2e(t *testing.T) {
 	})
 
 	type wants struct {
-		code     int
-		name     string
-		category string
+		code      int
+		name      string
+		category  string
+		imageData []byte
 	}
 	cases := map[string]struct {
-		args map[string]string
+		args      map[string]string
+		imageData []byte
 		wants
 	}{
 		"ok: correctly inserted": {
@@ -270,15 +275,17 @@ func TestAddItemE2e(t *testing.T) {
 				"name":     "used iPhone 16e",
 				"category": "phone",
 			},
+			imageData: []byte(testImageData),
 			wants: wants{
 				code: http.StatusOK,
 			},
 		},
-		"ng: failed to insert due to empty name": {
+		"ng: failed to insert due to empty name and image": {
 			args: map[string]string{
 				"name":     "",
 				"category": "phone",
 			},
+			imageData: nil,
 			wants: wants{
 				code: http.StatusBadRequest,
 			},
@@ -331,8 +338,8 @@ func TestAddItemE2e(t *testing.T) {
 				if err := json.NewDecoder(rr.Body).Decode(&item); err != nil {
 					t.Errorf("failed to decode response body: %v", err)
 				}
-				if item.Name != tt.wants.name || item.Category != tt.wants.category {
-					t.Errorf("expected (name, category) = (%s, %s), but got (%s, %s)", tt.wants.name, tt.wants.category, item.Name, item.Category)
+				if item.Name != tt.wants.name || item.Category != tt.wants.category || !bytes.Equal(item.Image, tt.wants.imageData) {
+					t.Errorf("expected (name, category,imageData) = (%s, %s,%v), but got (%s, %s%v)", tt.wants.name, tt.wants.category, tt.wants.imageData, item.Name, item.Category, item.Image)
 				}
 			}
 		})

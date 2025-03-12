@@ -15,7 +15,7 @@ var errImageNotFound = errors.New("image not found")
 type Item struct {
 	ID       int    `db:"id" json:"-"`
 	Name     string `db:"name" json:"name"`
-	Category string `db:"category_name" json:"category_name"`
+	Category string `db:"category" json:"category"`
 	Image    string `db:"image_name" json:"image_name"`
 }
 
@@ -96,7 +96,7 @@ func StoreImage(fileName string, image []byte) error {
 
 func (i *itemRepository) GetAllItem(ctx context.Context) ([]Item, error) {
 	rows, err := i.db.QueryContext(ctx, `
-		SELECT items.id, items.name, categories.name AS category_name ,items.image_name
+		SELECT items.id, items.name, categories.name AS category ,items.image_name
 		FROM items
 		JOIN categories ON items.category_id = categories.id
 		`)

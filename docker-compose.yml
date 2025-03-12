@@ -1,0 +1,13 @@
+services:
+  go:
+    build:
+      context: ./go
+      dockerfile: Dockerfile
+    ports:
+      - "9000:9000"
+  web:
+    build:
+      context: ./typescript/simple-mercari-web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"

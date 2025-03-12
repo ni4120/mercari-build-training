@@ -5,23 +5,63 @@
 .Title {
   background-color: #222427;
   min-height: 8vh;
+  padding-top: 30px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: left;
   font-size: calc(10px + 1vmin);
   color: white;
+  background-color:#0068b7;
 }
 
 .Listing {
-  background-color: #222427;
   min-height: 8vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: left;
+  gap: 8px;
+  padding: 8px;
   font-size: calc(10px + 1vmin);
   color: white;
+  background-color: #0068b7;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.Listing input[type="text"],
+.Listing input[type="file"] {
+  background-color: #fff;
+  color: #333;
+  box-sizing: border-box;
+}
+
+.Listing input[type="text"]::placeholder {
+  color: #aaa;
+}
+.Listing button {
+  margin-left: 10px;
+  padding: 12px 16px;
+  font-size: 1.1em;
+  font-weight: 600;
+  border: none;
+  border-radius: 4px;
+  background-color: #003e70;
+  color: #fff;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.Listing button:hover {
+  background-color: #008bfd;
+}
+.ItemListContainer {
+  display: grid;
+  padding-top: 30px;
+  padding-left: 120px;
+  padding-right: 120px;
+  grid-template-columns: repeat(4, 1fr);
+  height: 100vh;
+  background-color: white;
 }
 
 .ItemList {
@@ -32,7 +72,8 @@
   align-items: center;
   justify-content: left;
   font-size: calc(10px + 1vmin);
-  color: white;
+  color: black;
+  background-color: white;
 }
 
 .App-link {
